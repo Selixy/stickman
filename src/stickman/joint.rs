@@ -25,29 +25,54 @@ impl Joint {
     }
 }
 
-/// Initialise un vecteur de joints + une map "nom -> index"
+/// On crée un tableau de 12 articulations correspondant exactement
+/// à l'ancien StickmanParts :
+/// 0: pelvis
+/// 1: corps_end (haut du tronc)
+/// 2: cou_end
+/// 3: tete_center
+/// 4: bras_l_end
+/// 5: avant_bras_l_end
+/// 6: bras_r_end
+/// 7: avant_bras_r_end
+/// 8: cuisse_l_end
+/// 9: jambe_l_end
+/// 10: cuisse_r_end
+/// 11: jambe_r_end
+///
+/// Chacun stocke un angle, min, max (à adapter).
 pub fn init_joints() -> Vec<Joint> {
     let mut joints = Vec::new();
+    joints.reserve(12);
 
-    // Ordre imposé des articulations
-    // 0: bassin_gauche
-    joints.push(Joint::new(0.0, -90.0, 90.0));
-    // 1: genou_gauche
-    joints.push(Joint::new(0.0, 0.0, 130.0));
-    // 2: bassin_droit
-    joints.push(Joint::new(0.0, -90.0, 90.0));
-    // 3: genou_droit
-    joints.push(Joint::new(0.0, 0.0, 130.0));
+    // pelvis
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 0
+    // corps_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 1
+    // cou_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 2
+    // tete_center
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 3
 
-    // 4: epaule_gauche
-    joints.push(Joint::new(0.0, -90.0, 90.0));
-    // 5: coude_gauche
-    joints.push(Joint::new(0.0, 0.0, 130.0));
-    // 6: epaule_droite
-    joints.push(Joint::new(0.0, -90.0, 90.0));
-    // 7: coude_droite
-    joints.push(Joint::new(0.0, 0.0, 130.0));
+    // bras_l_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 4
+    // avant_bras_l_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 5
+
+    // bras_r_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 6
+    // avant_bras_r_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 7
+
+    // cuisse_l_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 8
+    // jambe_l_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 9
+
+    // cuisse_r_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 10
+    // jambe_r_end
+    joints.push(Joint::new(0.0, -180.0, 180.0)); // 11
 
     joints
 }
-

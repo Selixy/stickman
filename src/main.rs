@@ -4,7 +4,6 @@ mod stickman;
 use macroquad::prelude::*;
 use crate::window_conf::window_conf;
 
-// On importe la logique du stickman
 use crate::stickman::{
     init_joints,
     calculate_stickman_positions,
@@ -14,34 +13,46 @@ use crate::stickman::{
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut joints = init_joints(); // plus de map, juste un Vec<Joint>
+    let mut joints = init_joints();
 
     loop {
         clear_background(WHITE);
 
+        // Dessin d'une ligne de sol
         draw_line(0.0, 550.0, 800.0, 550.0, 10.0, DARKGREEN);
 
-        // Mettons à jour les angles en fonction de l'index
-        // 0: bassin_gauche
-        joints[0].angle_deg = -40.0;
-        // 1: genou_gauche
-        joints[1].angle_deg = 0.0;
-        // 2: bassin_droit
-        joints[2].angle_deg = 40.0;
-        // 3: genou_droit
-        joints[3].angle_deg = 0.0;
-        // 4: epaule_gauche
-        joints[4].angle_deg = -40.0;
-        // 5: coude_gauche
-        joints[5].angle_deg = 0.0;
-        // 6: epaule_droite
-        joints[6].angle_deg = 40.0;
-        // 7: coude_droite
-        joints[7].angle_deg = 0.0;
 
-        let stickman_positions = calculate_stickman_positions(&mut joints, &DIMENSIONS);
+    // 1 articulation root
+    joints[1].angle_deg = 0.0;
+    // 2 articulation cou
+    joints[2].angle_deg = 0.0;
 
-        draw_stickman(stickman_positions);
+    // 4 articulation épaule gauche
+    joints[4].angle_deg = 0.0;
+    // 5 articulation coude gauche
+    joints[5].angle_deg = 0.0;
+
+    // 6 articulation épaule droite
+    joints[6].angle_deg = 0.0;
+    // 7 articulation coude droite
+    joints[7].angle_deg = 0.0;
+
+    // 8 articulation hanche gauche
+    joints[8].angle_deg = 0.0;
+    // 9 articulation genou gauche
+    joints[9].angle_deg = 0.0;
+
+    // 10 articulation hanche droite
+    joints[10].angle_deg = 0.0;
+    // 11 articulation genou droite
+    joints[11].angle_deg = 0.0;
+
+
+        // Mise à jour des positions
+        calculate_stickman_positions(&mut joints, &DIMENSIONS);
+
+        // Dessin
+        draw_stickman(&joints);
 
         next_frame().await;
     }
