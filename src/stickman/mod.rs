@@ -14,7 +14,6 @@ pub struct StickmanDimensions {
     pub longueur_bras: f32,
     pub longueur_avant_bras: f32,
     pub rayon_tete: f32,
-    pub origin: (f32, f32), // point d'ancrage du pelvis
 }
 
 pub const DIMENSIONS: StickmanDimensions = StickmanDimensions {
@@ -25,7 +24,6 @@ pub const DIMENSIONS: StickmanDimensions = StickmanDimensions {
     longueur_bras: 60.0,
     longueur_avant_bras: 50.0,
     rayon_tete: 25.0,
-    origin: (200.0, 545.0),
 };
 
 pub use joint::{Joint, init_joints};
