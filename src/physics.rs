@@ -87,6 +87,13 @@ impl Physics {
                     } else {
                         y_velocity += GRAVITY * delta_time;
                     }
+                    for joint in joints.iter() {
+                        if joint.position.1 > GROUND_Y {
+                            let penetration = joint.position.1 - GROUND_Y; // Distance sous le sol
+                            y_velocity -= penetration * 1.0; // Force proportionnelle au dépassement
+                        }
+                    }
+                    
 
                     joints[0].position.1 += y_velocity;
 
