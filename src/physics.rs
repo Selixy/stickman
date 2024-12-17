@@ -1,10 +1,8 @@
 use crate::stickman::{calculate_stickman_positions, init_joints, DIMENSIONS, Joint};
+use crate::genetic::Individual;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng}; // Pour créer un StdRng avec une seed
-use crate::genetic::GeneticAlgorithm;
 
 const GRAVITY: f32 = 9.8;
 const GROUND_Y: f32 = 545.0;
@@ -12,136 +10,99 @@ const GROUND_Y: f32 = 545.0;
 pub struct Physics {
     pub joints: Arc<Mutex<Vec<Joint>>>,
     pub tick_rate: Arc<Mutex<f32>>,
-    previous_rotations: Vec<f32>, // Rotations précédentes
+    cycles: Vec<crate::genetic::Cycle>,
+    current_cycle: usize,
+    frame_counter: usize,
+    is_dead: bool,
 }
 
 impl Physics {
-    /// Crée une nouvelle instance de `Physics` avec une position initiale
-    pub fn new_with_position(initial_position: (f32, f32), tick_rate: f32) -> Self {
+    /// Initialise un nouvel objet `Physics` avec un individu génétique.
+    pub fn new_with_individual(
+        initial_position: (f32, f32),
+        tick_rate: f32,
+        individual: Individual,
+    ) -> Self {
         let mut joints = init_joints();
         joints[0].position = initial_position;
 
         Self {
             joints: Arc::new(Mutex::new(joints)),
             tick_rate: Arc::new(Mutex::new(tick_rate)),
-            previous_rotations: vec![0.0; 10], // Initialise les rotations précédentes à 0
+            cycles: individual.cycles.clone(),
+            current_cycle: 0,
+            frame_counter: 0,
+            is_dead: false,
         }
     }
 
-    /// Génère une nouvelle liste de rotations aléatoires pour les articulations importantes
-    pub fn generate_random_rotations(rng: &mut StdRng) -> Vec<f32> {
-        (0..10) // Nombre d'articulations importantes
-            .map(|_| rng.gen_range(-45.0..45.0)) // Angle entre -45° et 45°
-            .collect()
+    pub fn is_alive(&self) -> bool {
+        !self.is_dead
     }
 
-    /// Interpole entre deux ensembles de rotations
-    pub fn interpolate_rotations(from: &[f32], to: &[f32], t: f32) -> Vec<f32> {
-        from.iter()
-            .zip(to.iter())
-            .map(|(&a, &b)| a + t * (b - a)) // Lerp : a + t * (b - a)
-            .collect()
-    }
-
-    /// Démarre la simulation de physique dans un thread séparé
     pub fn start(&mut self) {
         let joints = Arc::clone(&self.joints);
         let tick_rate = Arc::clone(&self.tick_rate);
-
-        let mut previous_rotations = self.previous_rotations.clone(); // Rotations précédentes
-        let mut rng = StdRng::from_entropy(); // Crée un StdRng thread-safe avec une seed aléatoire
-        let mut next_rotations = Self::generate_random_rotations(&mut rng);
-
-        let mut ga = GeneticAlgorithm::new(10, 2, 0.2); // Population de 10, 2 meilleurs candidats
-        
-        // Déclare le buffer pour stocker les populations
-        let mut population_buffer: Vec<Vec<Vec<f32>>> = Vec::new(); 
+        let cycles = self.cycles.clone();
 
         thread::spawn(move || {
-            let important_indices = [1, 2, 4, 5, 7, 8, 10, 11, 13, 14]; // Indices des articulations importantes
+            let important_indices = [1, 2, 4, 5, 7, 8, 10, 11, 13, 14];
             let mut y_velocity = 0.0;
             let mut previous_time = Instant::now();
+            let mut current_cycle = 0;
             let mut frame_counter = 0;
-            let mut next_update = rng.gen_range(20..=40);
 
             loop {
                 let current_time = Instant::now();
                 let delta_time = (current_time - previous_time).as_secs_f32();
                 previous_time = current_time;
 
-                frame_counter += 1;
-
-                // Interpolation entre rotations précédentes et nouvelles
-                let t = frame_counter as f32 / next_update as f32;
-                let interpolated_rotations =
-                    Physics::interpolate_rotations(&previous_rotations, &next_rotations, t);
+                // Récupère le cycle actuel
+                let cycle = &cycles[current_cycle];
 
                 {
-                    let mut joints_guard = joints.lock().unwrap(); // Verrouillage ici
+                    let mut joints_guard = joints.lock().unwrap();
 
-                    // Appliquer les rotations interpolées
-                    for (i, &angle) in important_indices.iter().zip(interpolated_rotations.iter()) {
+                    // Applique les rotations aux articulations importantes
+                    for (i, &angle) in important_indices.iter().zip(cycle.rotations.iter()) {
                         joints_guard[*i].angle_deg = angle;
                     }
 
+                    // Applique la gravité à l'ensemble des articulations
                     for joint in joints_guard.iter_mut() {
-                        joint.is_colliding = joint.position.1 >= GROUND_Y - 11.5;
-                    }
-
-                    if joints_guard.iter().any(|joint| joint.is_colliding) {
-                        y_velocity = 0.0;
-                    } else {
-                        y_velocity += GRAVITY * delta_time;
-                    }
-
-                    for joint in joints_guard.iter() {
-                        if joint.position.1 > GROUND_Y {
-                            let penetration = joint.position.1 - GROUND_Y; // Distance sous le sol
-                            y_velocity -= penetration * 1.0; // Force proportionnelle au dépassement
+                        joint.position.1 += y_velocity * delta_time; // Applique la vitesse verticale
+                        
+                        if joint.position.1 >= GROUND_Y {
+                            // Collision avec le sol
+                            joint.position.1 = GROUND_Y;
+                            y_velocity = 0.0; // Réinitialise la vitesse à 0
                         }
                     }
 
-                    joints_guard[0].position.1 += y_velocity;
+                    // Met à jour la vitesse verticale avec la gravité
+                    y_velocity += GRAVITY * delta_time;
 
+                    // Recalcule les positions des joints
                     calculate_stickman_positions(&mut joints_guard, &DIMENSIONS);
                 }
 
-                // Générer de nouvelles rotations aléatoires toutes les 20-40 frames
-                if frame_counter >= next_update {
-                    previous_rotations = next_rotations.clone();
-                    next_rotations = Physics::generate_random_rotations(&mut rng);
+                // Gestion des cycles
+                frame_counter += 1;
+                if frame_counter >= cycle.duration {
                     frame_counter = 0;
-                    next_update = rng.gen_range(20..=40);
-                }
+                    current_cycle += 1;
 
-                // Ajouter la population dans le buffer tous les 10 cycles
-                if frame_counter % 10 == 0 {
-                    population_buffer.push(ga.population.clone()); // Ajoute une copie de la population
-                    // Ne pas vider la population ici !
-                }
-
-                // L'algorithme génétique évalue la pose actuelle et génère une nouvelle génération
-                if frame_counter % 20 == 0 {
-                    let score = {
-                        let joints_guard = joints.lock().unwrap(); // Accès sécurisé
-                        joints_guard.iter().map(|j| j.position.1).fold(f32::MIN, f32::max)
-                    };
-
-                    ga.evaluate_pose(frame_counter % ga.population_size, score);
-
-                    if frame_counter % ga.population_size == 0 {
-                        ga.generate_new_generation();
+                    if current_cycle >= cycles.len() {
+                        println!("Individu terminé !");
+                        break;
                     }
                 }
 
-                // Générer le cycle suivant entre 10 et 30 frames
-                let current_tick_rate = *tick_rate.lock().unwrap();
-                thread::sleep(Duration::from_secs_f32(current_tick_rate));
+                thread::sleep(Duration::from_secs_f32(*tick_rate.lock().unwrap()));
             }
         });
     }
 
-    /// Récupère les joints pour affichage
     pub fn get_joints(&self) -> Arc<Mutex<Vec<Joint>>> {
         Arc::clone(&self.joints)
     }
