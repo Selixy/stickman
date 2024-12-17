@@ -2,6 +2,7 @@ mod window_conf;
 mod stickman;
 mod physics;
 mod l_system;
+mod genetic;
 
 use std::convert::TryInto; // Pour convertir u32 -> usize
 use macroquad::prelude::*;

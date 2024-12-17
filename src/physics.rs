@@ -4,6 +4,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng}; // Pour créer un StdRng avec une seed
+use crate::genetic::GeneticAlgorithm;
 
 const GRAVITY: f32 = 9.8;
 const GROUND_Y: f32 = 545.0;
@@ -51,6 +52,11 @@ impl Physics {
         let mut rng = StdRng::from_entropy(); // Crée un StdRng thread-safe avec une seed aléatoire
         let mut next_rotations = Self::generate_random_rotations(&mut rng);
 
+        let mut ga = GeneticAlgorithm::new(10, 2, 0.2); // Population de 10, 2 meilleurs candidats
+        
+        // Déclare le buffer pour stocker les populations
+        let mut population_buffer: Vec<Vec<Vec<f32>>> = Vec::new(); 
+
         thread::spawn(move || {
             let important_indices = [1, 2, 4, 5, 7, 8, 10, 11, 13, 14]; // Indices des articulations importantes
             let mut y_velocity = 0.0;
@@ -71,33 +77,33 @@ impl Physics {
                     Physics::interpolate_rotations(&previous_rotations, &next_rotations, t);
 
                 {
-                    let mut joints = joints.lock().unwrap();
+                    let mut joints_guard = joints.lock().unwrap(); // Verrouillage ici
 
                     // Appliquer les rotations interpolées
                     for (i, &angle) in important_indices.iter().zip(interpolated_rotations.iter()) {
-                        joints[*i].angle_deg = angle;
+                        joints_guard[*i].angle_deg = angle;
                     }
 
-                    for joint in joints.iter_mut() {
+                    for joint in joints_guard.iter_mut() {
                         joint.is_colliding = joint.position.1 >= GROUND_Y - 11.5;
                     }
 
-                    if joints.iter().any(|joint| joint.is_colliding) {
+                    if joints_guard.iter().any(|joint| joint.is_colliding) {
                         y_velocity = 0.0;
                     } else {
                         y_velocity += GRAVITY * delta_time;
                     }
-                    for joint in joints.iter() {
+
+                    for joint in joints_guard.iter() {
                         if joint.position.1 > GROUND_Y {
                             let penetration = joint.position.1 - GROUND_Y; // Distance sous le sol
                             y_velocity -= penetration * 1.0; // Force proportionnelle au dépassement
                         }
                     }
-                    
 
-                    joints[0].position.1 += y_velocity;
+                    joints_guard[0].position.1 += y_velocity;
 
-                    calculate_stickman_positions(&mut joints, &DIMENSIONS);
+                    calculate_stickman_positions(&mut joints_guard, &DIMENSIONS);
                 }
 
                 // Générer de nouvelles rotations aléatoires toutes les 20-40 frames
@@ -108,6 +114,27 @@ impl Physics {
                     next_update = rng.gen_range(20..=40);
                 }
 
+                // Ajouter la population dans le buffer tous les 10 cycles
+                if frame_counter % 10 == 0 {
+                    population_buffer.push(ga.population.clone()); // Ajoute une copie de la population
+                    // Ne pas vider la population ici !
+                }
+
+                // L'algorithme génétique évalue la pose actuelle et génère une nouvelle génération
+                if frame_counter % 20 == 0 {
+                    let score = {
+                        let joints_guard = joints.lock().unwrap(); // Accès sécurisé
+                        joints_guard.iter().map(|j| j.position.1).fold(f32::MIN, f32::max)
+                    };
+
+                    ga.evaluate_pose(frame_counter % ga.population_size, score);
+
+                    if frame_counter % ga.population_size == 0 {
+                        ga.generate_new_generation();
+                    }
+                }
+
+                // Générer le cycle suivant entre 10 et 30 frames
                 let current_tick_rate = *tick_rate.lock().unwrap();
                 thread::sleep(Duration::from_secs_f32(current_tick_rate));
             }

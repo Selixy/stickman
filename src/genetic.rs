@@ -1,73 +1,89 @@
-use crate::physics::Physics;
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 pub struct GeneticAlgorithm {
-    pub population: Vec<Physics>,
+    pub population: Vec<Vec<f32>>,
+    pub scores: Vec<f32>,
+    pub population_size: usize,
+    pub num_best: usize,
     pub mutation_rate: f32,
+    rng: StdRng,
 }
 
 impl GeneticAlgorithm {
-    pub fn new(population_size: usize, initial_position: (f32, f32), tick_rate: f32) -> Self {
+    /// Initialise l'algorithme génétique avec une population aléatoire
+    pub fn new(population_size: usize, num_best: usize, mutation_rate: f32) -> Self {
+        let mut rng = StdRng::from_entropy();
         let population = (0..population_size)
-            .map(|_| {
-                let mut physics = Physics::new_with_position(initial_position, tick_rate);
-                physics.start();
-                physics
-            })
+            .map(|_| (0..10).map(|_| rng.gen_range(-45.0..45.0)).collect())
             .collect();
 
         Self {
             population,
-            mutation_rate: 0.1,
+            scores: vec![0.0; population_size],
+            population_size,
+            num_best,
+            mutation_rate,
+            rng,
         }
     }
 
-    pub fn select_best(&self) -> Vec<&Physics> {
-        let mut sorted = self.population.iter().collect::<Vec<_>>();
-        sorted.sort_by(|a, b| b.get_score().partial_cmp(&a.get_score()).unwrap());
-        sorted.into_iter().take(2).collect()
+    /// Évalue une pose actuelle et stocke le score
+    pub fn evaluate_pose(&mut self, index: usize, score: f32) {
+        self.scores[index] = score;
     }
 
-    pub fn crossover(&self, parent1: &Physics, parent2: &Physics) -> Vec<Vec<f32>> {
-        let mut rng = rand::thread_rng();
-        parent1
-            .get_keyframes()
+    /// Sélectionne les meilleures poses en fonction des scores
+    fn select_best(&self) -> Vec<Vec<f32>> {
+        let mut combined: Vec<(f32, &Vec<f32>)> = self.scores
             .iter()
-            .zip(parent2.get_keyframes())
-            .map(|(f1, f2)| {
-                f1.iter()
-                    .zip(f2)
-                    .map(|(&a, &b)| if rng.gen_bool(0.5) { a } else { b })
-                    .collect()
-            })
+            .zip(self.population.iter())
+            .map(|(&score, rotations)| (score, rotations)) // Déréférence &f32
+            .collect();
+
+        combined.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap()); // Tri décroissant
+        combined
+            .iter()
+            .take(self.num_best)
+            .map(|(_, rotations)| (*rotations).clone())
             .collect()
     }
 
-    pub fn mutate(&self, keyframes: &mut Vec<Vec<f32>>) {
-        let mut rng = rand::thread_rng();
-        for frame in keyframes.iter_mut() {
-            for angle in frame.iter_mut() {
-                if rng.gen::<f32>() < self.mutation_rate {
-                    *angle += rng.gen_range(-10.0..10.0);
-                    *angle = angle.clamp(-180.0, 180.0);
-                }
+    /// Croisement entre deux parents pour générer un enfant
+    fn crossover(&mut self, parent1: &[f32], parent2: &[f32]) -> Vec<f32> {
+        parent1
+            .iter()
+            .zip(parent2.iter())
+            .map(|(a, b)| if self.rng.gen::<bool>() { *a } else { *b })
+            .collect()
+    }
+
+    /// Mutation pour explorer de nouvelles solutions
+    fn mutate(&mut self, rotations: &mut Vec<f32>) {
+        for angle in rotations.iter_mut() {
+            if self.rng.gen::<f32>() < self.mutation_rate {
+                *angle += self.rng.gen_range(-5.0..5.0);
+                *angle = angle.clamp(-45.0, 45.0);
             }
         }
     }
 
-    pub fn evolve(&mut self) {
-        let best = self.select_best();
-        let mut new_population = Vec::new();
-
-        while new_population.len() < self.population.len() {
-            let child_keyframes = self.crossover(best[0], best[1]);
-            let mut child = Physics::new_with_position((150.0, 345.0), 1.0 / 60.0);
-            child.set_keyframes(child_keyframes);
-            self.mutate(&mut child.keyframes);
-            child.start();
-            new_population.push(child);
-        }
-
-        self.population = new_population;
+    /// Génère une nouvelle génération de solutions
+pub fn generate_new_generation(&mut self) {
+    if self.population.is_empty() {
+        println!("La population est vide. Impossible de générer une nouvelle génération !");
+        return; // Évite un crash si la population est vide
     }
+
+    let best = self.select_best();
+    let mut new_population = Vec::new();
+
+    for i in 0..self.population_size {
+        let mut child = self.crossover(&best[i % self.num_best], &best[(i + 1) % self.num_best]);
+        self.mutate(&mut child);
+        new_population.push(child);
+    }
+
+    self.population = new_population;
+}
 }
