@@ -13,10 +13,6 @@ use crate::l_system::draw_l_system_tree;
 const FIXED_TICK_RATE: f32 = 1.0 / 60.0;
 const GROUND_Y: f32 = 545.0;
 
-const NUM_TREES: usize = 5;     // Nombre d'arbres à dessiner
-const TEXT_START_Y: f32 = 20.0; // Position de départ verticale pour les HTS
-const TEXT_GAP_Y: f32 = 15.0;   // Décalage vertical entre chaque HTS
-
 // Structure pour stocker les informations des arbres
 struct Tree {
     position_x: f32,
@@ -40,7 +36,6 @@ async fn main() {
     for i in 0..5 {
         let position_x = 150.0 + i as f32 * 100.0;
         let mut physics = Physics::new_with_position((position_x, GROUND_Y - 200.0), FIXED_TICK_RATE);
-        physics.generate_random_keyframes(); // Générer des mouvements aléatoires
         physics.start();
         stickman_physics.push(physics);
     }
