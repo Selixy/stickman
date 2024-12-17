@@ -1,44 +1,62 @@
 mod window_conf;
 mod stickman;
 mod physics;
+mod l_system;
 
+use std::convert::TryInto; // Pour convertir u32 -> usize
 use macroquad::prelude::*;
 use crate::window_conf::window_conf;
 use crate::stickman::draw_stickman;
 use crate::physics::Physics;
+use crate::l_system::draw_l_system_tree;
 
 const FIXED_TICK_RATE: f32 = 1.0 / 60.0;
 const GROUND_Y: f32 = 545.0;
 
+const NUM_TREES: usize = 5;     // Nombre d'arbres à dessiner
 const TEXT_START_Y: f32 = 20.0; // Position de départ verticale pour les HTS
 const TEXT_GAP_Y: f32 = 15.0;   // Décalage vertical entre chaque HTS
+
+// Structure pour stocker les informations des arbres
+struct Tree {
+    position_x: f32,
+    seed: u32,
+}
 
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut stickman_physics: Vec<Physics> = Vec::new();
 
+    // Utiliser des seeds fixes et des positions prédéfinies pour les arbres
+    let trees = vec![
+        Tree { position_x: 100.0, seed: 5 },
+        Tree { position_x: 300.0, seed: 7 },
+        Tree { position_x: 500.0, seed: 9 },
+        Tree { position_x: 700.0, seed: 11 },
+        Tree { position_x: 900.0, seed: 13 },
+    ];
+
+    // Initialisation des Stickmen
     for i in 0..5 {
         let position_x = 150.0 + i as f32 * 100.0;
-        let physics = Physics::new_with_position((position_x, GROUND_Y - 200.0), FIXED_TICK_RATE);
+        let mut physics = Physics::new_with_position((position_x, GROUND_Y - 200.0), FIXED_TICK_RATE);
+        physics.generate_random_keyframes(); // Générer des mouvements aléatoires
         physics.start();
         stickman_physics.push(physics);
     }
 
-    let mut use_fixed_rate = true;
-
     loop {
         clear_background(WHITE);
 
-        // Détecter le clic sous le sol pour basculer le mode global
-        if is_mouse_button_pressed(MouseButton::Left) {
-            let (_mx, my) = mouse_position();
-            if my > GROUND_Y + 10.0 {
-                use_fixed_rate = !use_fixed_rate;
-                let tick_rate = if use_fixed_rate { FIXED_TICK_RATE } else { 0.0 };
-                for physics in &stickman_physics {
-                    physics.set_tick_rate(tick_rate);
-                }
-            }
+        // Dessiner les arbres avec des seeds fixes
+        for tree in &trees {
+            draw_l_system_tree(
+                tree.position_x,
+                GROUND_Y - 10.0,
+                -90.0,
+                100.0,
+                (tree.seed % 5 + 3).try_into().unwrap(), // Conversion en usize
+            );
         }
 
         // Dessiner la ligne de sol
@@ -50,21 +68,6 @@ async fn main() {
             let joints = joints.lock().unwrap();
             draw_stickman(&joints);
         }
-
-        // Afficher les HTS de chaque thread en haut à gauche
-        let mut y_offset = TEXT_START_Y;
-        for (i, physics) in stickman_physics.iter().enumerate() {
-            let hts_text = format!("T{} {}Hrz", i + 1, physics.get_hts().round() as i32);
-            draw_text(&hts_text, 20.0, y_offset, 20.0, RED);
-            y_offset += TEXT_GAP_Y;
-        }
-
-        // Affichage global du mode sous le sol
-        let mode_text = if use_fixed_rate { "Réel mod" } else { "Learning mod" };
-        let text_dimensions = measure_text(mode_text, None, 30, 1.0);
-        let text_x = (screen_width() - text_dimensions.width) / 2.0;
-        let text_y = GROUND_Y + 40.0;
-        draw_text(mode_text, text_x, text_y, 30.0, BLUE);
 
         next_frame().await;
     }
